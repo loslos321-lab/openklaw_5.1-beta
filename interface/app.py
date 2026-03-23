@@ -22,16 +22,22 @@ CLAWWORK_AVAILABLE = False
 LOCAL_MODE = False
 
 # Check if ClawWork exists locally
-clawwork_path = Path(__file__).parent.parent / "clawwork"
+BASE_DIR = Path(__file__).parent.parent
+clawwork_path = BASE_DIR / "clawwork"
+
 if clawwork_path.exists():
+    # Set up correct Python paths for ClawWork imports
     sys.path.insert(0, str(clawwork_path))
     sys.path.insert(0, str(clawwork_path / "livebench"))
+    sys.path.insert(0, str(clawwork_path / "livebench" / "agent"))
+    
     try:
         from livebench.agent.live_agent import LiveAgent
         CLAWWORK_AVAILABLE = True
         LOCAL_MODE = True
-    except ImportError:
-        pass
+        print("[OK] ClawWork loaded - Local Mode active")
+    except ImportError as e:
+        print(f"[WARN] ClawWork import failed: {e}")
 
 if LOCAL_MODE:
     print("🚀 Running in LOCAL MODE with full ClawWork integration")
@@ -894,12 +900,14 @@ elif st.session_state.page == 'run':
             def run_real_agent():
                 """Run the actual ClawWork agent"""
                 try:
-                    # Prepare environment
+                    # Prepare environment with correct Python paths
                     env = os.environ.copy()
                     env['PYTHONIOENCODING'] = 'utf-8'
-                    env['PYTHONPATH'] = str(clawwork_path)
+                    # Important: Set PYTHONPATH with all required paths
+                    pythonpath = f"{clawwork_path};{clawwork_path / 'livebench'};{clawwork_path / 'livebench' / 'agent'}"
+                    env['PYTHONPATH'] = pythonpath
                     
-                    # Build command
+                    # Build command - use run_agent.py from kimiclaw directory
                     cmd = [
                         sys.executable,
                         str(BASE_DIR / "run_agent.py"),
@@ -916,7 +924,7 @@ elif st.session_state.page == 'run':
                         bufsize=1,
                         universal_newlines=True,
                         env=env,
-                        cwd=str(clawwork_path)
+                        cwd=str(BASE_DIR)  # Run from kimiclaw directory
                     )
                     
                     # Read output
