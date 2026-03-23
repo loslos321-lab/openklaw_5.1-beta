@@ -14,6 +14,9 @@ from datetime import datetime
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional
 
+# Import virtual agent for simulation mode
+from virtual_agent import simulate_agent_work, quick_demo_task, VirtualAgent
+
 # Page config - Dark theme like GitHub
 st.set_page_config(
     page_title="KimiClaw | AI Code Agent",
@@ -802,53 +805,112 @@ elif st.session_state.page == 'run':
     
     st.header("▶️ Agent Execution")
     
+    # Simulations-Modus Hinweis
+    st.info("🎮 **Simulation Mode**: Tasks are processed with AI-generated code examples. No real API calls.")
+    
     col1, col2 = st.columns([2, 1])
     
     with col1:
         # Select agent and task
         agent_names = [a.name for a in st.session_state.agents]
-        task_titles = [t.title for t in st.session_state.tasks if t.status == "pending"]
+        pending_tasks = [t for t in st.session_state.tasks if t.status == "pending"]
+        task_titles = [t.title for t in pending_tasks]
         
-        selected_agent = st.selectbox("Select Agent", agent_names)
-        selected_task = st.selectbox("Select Task", task_titles) if task_titles else st.selectbox("Select Task", ["No pending tasks"])
+        selected_agent_name = st.selectbox("Select Agent", agent_names)
+        selected_task_title = st.selectbox("Select Task", task_titles) if task_titles else st.selectbox("Select Task", ["No pending tasks"])
+        
+        # Find selected objects
+        selected_agent = next((a for a in st.session_state.agents if a.name == selected_agent_name), None)
+        selected_task = next((t for t in pending_tasks if t.title == selected_task_title), None)
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("▶️ Start Execution", type="primary", use_container_width=True):
-                st.info("Starting agent... (Simulation)")
+            if st.button("▶️ Start Execution", type="primary", use_container_width=True, disabled=not selected_task):
+                if selected_task and selected_agent:
+                    st.session_state.current_task = selected_task
+                    st.session_state.current_agent = selected_agent
+                    st.session_state.execution_running = True
+                    st.rerun()
         with col2:
-            if st.button("⏹️ Stop All", use_container_width=True):
-                st.warning("Stopping all agents...")
+            if st.button("🔄 Reset", use_container_width=True):
+                st.session_state.execution_running = False
+                st.rerun()
     
     with col2:
-        st.markdown("""
+        # Stats
+        completed = len([t for t in st.session_state.tasks if t.status == "completed"])
+        st.markdown(f"""
         <div class="gh-card">
-            <div class="gh-card-header">Execution Stats</div>
+            <div class="gh-card-header">Session Stats</div>
             <div style="color: #8b949e; font-size: 14px;">
-                <div>Active: 0</div>
-                <div>Completed: 0</div>
-                <div>Failed: 0</div>
+                <div>Status: {'🟢 Running' if st.session_state.get('execution_running') else '⚪ Idle'}</div>
+                <div>Completed: {completed}</div>
+                <div>Mode: Simulation</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
     
-    # Terminal
-    st.markdown("""
-    <div style="margin-top: 24px;">
-        <div style="background-color: #161b22; border: 1px solid #30363d; border-radius: 6px 6px 0 0; 
-                    padding: 8px 16px; display: flex; align-items: center; gap: 8px;">
-            <span style="color: #8b949e; font-size: 12px;">TERMINAL</span>
-            <span style="color: #3fb950; font-size: 12px;">●</span>
+    # Execution Area
+    st.markdown("<div style='padding: 16px 0;'></div>", unsafe_allow_html=True)
+    
+    if st.session_state.get('execution_running') and selected_task and selected_agent:
+        # Progress
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        output_container = st.container()
+        
+        # Run simulation
+        status_text.text(f"🤖 {selected_agent.name} is working on '{selected_task.title}'...")
+        
+        payment, cost = simulate_agent_work(
+            selected_task.__dict__, 
+            selected_agent.__dict__, 
+            progress_bar, 
+            status_text, 
+            output_container
+        )
+        
+        # Mark complete
+        selected_task.status = "completed"
+        save_tasks(st.session_state.tasks)
+        
+        # Update agent balance
+        selected_agent.balance += payment - cost
+        save_agents(st.session_state.agents)
+        
+        st.success(f"✅ Task completed! Earned ${payment}, Cost ${cost}, Profit ${payment-cost}")
+        st.session_state.execution_running = False
+        
+        if st.button("📋 Back to Tasks"):
+            st.session_state.page = "tasks"
+            st.rerun()
+    
+    else:
+        # Empty terminal
+        st.markdown("""
+        <div style="margin-top: 24px;">
+            <div style="background-color: #161b22; border: 1px solid #30363d; border-radius: 6px 6px 0 0; 
+                        padding: 8px 16px; display: flex; align-items: center; gap: 8px;">
+                <span style="color: #8b949e; font-size: 12px;">TERMINAL - SIMULATION MODE</span>
+                <span style="color: #3fb950; font-size: 12px;">●</span>
+            </div>
+            <div class="terminal">
+                <div class="terminal-line"><span class="terminal-prompt">$</span> kimi-agent --version</div>
+                <div class="terminal-line">KimiClaw Multi-Agent v3.0.0 (Simulation)</div>
+                <div class="terminal-line"></div>
+                <div class="terminal-line"><span class="terminal-prompt">$</span> kimi-agent status</div>
+                <div class="terminal-line">🤖 Agents: {0} active</div>
+                <div class="terminal-line">📋 Tasks: {1} pending</div>
+                <div class="terminal-line">💰 Balance: ${2}</div>
+                <div class="terminal-line"></div>
+                <div class="terminal-line" style="color: #8b949e;">Select a task and click "Start Execution" to begin...</div>
+            </div>
         </div>
-        <div class="terminal">
-            <div class="terminal-line"><span class="terminal-prompt">$</span> kimi-agent start</div>
-            <div class="terminal-line">Initializing multi-agent system...</div>
-            <div class="terminal-line terminal-success">✓ Loaded {0} agents</div>
-            <div class="terminal-line terminal-success">✓ Loaded {1} tasks</div>
-            <div class="terminal-line">Ready for execution.</div>
-        </div>
-    </div>
-    """.format(len(st.session_state.agents), len(st.session_state.tasks)), unsafe_allow_html=True)
+        """.format(
+            len(st.session_state.agents),
+            len([t for t in st.session_state.tasks if t.status == "pending"]),
+            sum(a.balance for a in st.session_state.agents)
+        ), unsafe_allow_html=True)
 
 # Footer
 st.markdown("<div style='padding: 32px 0;'></div>", unsafe_allow_html=True)
