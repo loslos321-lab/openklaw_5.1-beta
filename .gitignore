@@ -1,0 +1,34 @@
+# Secrets
+.env
+*.env
+
+# Database
+data/*.db
+data/*.jsonl
+memory/
+work/
+sandbox/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

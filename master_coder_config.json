@@ -1,0 +1,144 @@
+{
+  "livebench": {
+    "name": "KimiClaw Master Coder",
+    "description": "All-round master coding agent with advanced software engineering capabilities",
+    "version": "1.0.0",
+    
+    "date_range": {
+      "init_date": "2025-03-23",
+      "end_date": "2025-12-31"
+    },
+    
+    "task_source": {
+      "type": "inline",
+      "tasks": [
+        {
+          "task_id": "coding-task-1",
+          "sector": "Technology",
+          "occupation": "Software Developer",
+          "prompt": "Create a Python function that reads a CSV file and calculates statistics (mean, median, mode) for numeric columns. Include error handling and documentation. The function should accept a file path as input and return a dictionary with column names as keys and statistics as values.",
+          "task_description": "CSV statistics calculator with error handling",
+          "estimated_hours": 2,
+          "reference_files": []
+        },
+        {
+          "task_id": "coding-task-2", 
+          "sector": "Technology",
+          "occupation": "Web Developer",
+          "prompt": "Build a simple REST API using FastAPI with CRUD operations for a 'Todo' item. Each todo should have: title (string), description (string), completed (boolean), and created_at (datetime). Include data validation, error handling, and in-memory storage.",
+          "task_description": "FastAPI Todo CRUD API",
+          "estimated_hours": 3,
+          "reference_files": []
+        },
+        {
+          "task_id": "coding-task-3",
+          "sector": "Technology", 
+          "occupation": "Data Engineer",
+          "prompt": "Write a Python script that fetches current weather data from a public API (e.g., OpenWeatherMap or similar), parses the JSON response, extracts key metrics (temperature, humidity, wind speed), and saves it to a SQLite database with a timestamp.",
+          "task_description": "Weather API to SQLite pipeline",
+          "estimated_hours": 2,
+          "reference_files": []
+        }
+      ]
+    },
+    
+    "economic": {
+      "initial_balance": 100.0,
+      "task_values_path": null,
+      "token_pricing": {
+        "input_per_1m": 2.5,
+        "output_per_1m": 10.0
+      }
+    },
+    
+    "agents": [
+      {
+        "signature": "kimiclaw-master-coder",
+        "basemodel": "kimi-k2-0725",
+        "enabled": true,
+        "tasks_per_day": 3,
+        "supports_multimodal": true,
+        "specialization": "software_engineering",
+        "capabilities": [
+          "code_generation",
+          "code_review",
+          "debugging",
+          "architecture_design",
+          "testing",
+          "documentation",
+          "api_design",
+          "database_design",
+          "frontend_development",
+          "backend_development",
+          "devops",
+          "security_audit"
+        ]
+      }
+    ],
+    
+    "agent_params": {
+      "max_steps": 50,
+      "max_retries": 5,
+      "base_delay": 1.0,
+      "api_timeout": 120.0,
+      "tasks_per_day": 3
+    },
+    
+    "evaluation": {
+      "use_llm_evaluation": true,
+      "meta_prompts_dir": "./eval/meta_prompts",
+      "coding_rubric": {
+        "correctness": 0.35,
+        "code_quality": 0.25,
+        "documentation": 0.15,
+        "testing": 0.15,
+        "best_practices": 0.10
+      }
+    },
+    
+    "master_coder_features": {
+      "enhanced_code_tools": true,
+      "multi_language_support": [
+        "python", "javascript", "typescript", "java", "go", 
+        "rust", "c", "cpp", "csharp", "sql", "html", "css",
+        "bash", "powershell", "yaml", "json", "xml"
+      ],
+      "framework_knowledge": [
+        "react", "vue", "angular", "svelte",
+        "node", "django", "flask", "fastapi", "spring",
+        "tensorflow", "pytorch", "pandas", "numpy"
+      ],
+      "devops_tools": [
+        "docker", "kubernetes", "terraform", "ansible",
+        "github_actions", "jenkins", "gitlab_ci"
+      ],
+      "auto_refactor": true,
+      "code_optimization": true,
+      "security_scan": true
+    },
+    
+    "data_path": "./data",
+    "memory_path": "./memory",
+    "work_path": "./work",
+    "sandbox_path": "./sandbox"
+  },
+  
+  "mcp_servers": {
+    "primary": {
+      "name": "KimiClaw MCP",
+      "url": "http://127.0.0.1:64342/sse",
+      "transport": "sse",
+      "enabled": true
+    }
+  },
+  
+  "coding_preferences": {
+    "default_language": "python",
+    "code_style": "pep8",
+    "documentation_style": "google_docstrings",
+    "test_framework": "pytest",
+    "linting": true,
+    "type_hints": true,
+    "auto_format": true
+  }
+}
