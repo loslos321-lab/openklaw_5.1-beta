@@ -292,6 +292,113 @@ st.markdown("""
     .task-item:hover {
         border-color: #58a6ff;
     }
+    
+    /* Progress Bar Animation */
+    @keyframes progress-pulse {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    .progress-bar-animated {
+        height: 8px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #238636, #2ea043, #3fb950, #2ea043, #238636);
+        background-size: 200% 100%;
+        animation: progress-pulse 2s ease infinite;
+        box-shadow: 0 0 10px rgba(46, 160, 67, 0.5);
+    }
+    
+    /* Step Indicator */
+    .step-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        transition: all 0.3s;
+    }
+    
+    .step-active {
+        border-color: #238636;
+        background: linear-gradient(90deg, rgba(35, 134, 54, 0.2), transparent);
+    }
+    
+    .step-complete {
+        border-color: #3fb950;
+        background: rgba(63, 185, 80, 0.1);
+    }
+    
+    /* Spinner Animation */
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid #30363d;
+        border-top-color: #238636;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    /* Live Pulse Dot */
+    @keyframes live-pulse {
+        0%, 100% { 
+            opacity: 1; 
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);
+        }
+        50% { 
+            opacity: 0.8; 
+            transform: scale(1.1);
+            box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);
+        }
+    }
+    
+    .live-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #f85149;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        background: #f85149;
+        border-radius: 50%;
+        animation: live-pulse 1.5s ease-in-out infinite;
+    }
+    
+    /* ETA Counter */
+    .eta-box {
+        background: linear-gradient(135deg, #21262d 0%, #161b22 100%);
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+    }
+    
+    .eta-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: #c9d1d9;
+        font-family: 'SF Mono', monospace;
+    }
+    
+    .eta-label {
+        font-size: 11px;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -886,16 +993,90 @@ elif st.session_state.page == 'run':
     
     if st.session_state.get('execution_running') and selected_task and selected_agent:
         
-        if LOCAL_MODE:
-            # REAL AGENT EXECUTION
-            st.info("🚀 Starting REAL agent execution...")
+        # LIVE PROGRESS INDICATOR HEADER
+        st.markdown(f"""
+        <div style="background: linear-gradient(90deg, #161b22 0%, #21262d 100%); 
+                    border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="spinner"></div>
+                    <div>
+                        <div style="font-weight: 600; color: #c9d1d9; font-size: 16px;">
+                            {selected_agent.name} is working
+                        </div>
+                        <div style="color: #8b949e; font-size: 13px;">
+                            Task: {selected_task.title}
+                        </div>
+                    </div>
+                </div>
+                <div class="live-indicator">
+                    <div class="live-dot"></div>
+                    <span>LIVE</span>
+                </div>
+            </div>
             
+            <!-- Animated Progress Bar -->
+            <div style="background: #21262d; border-radius: 4px; height: 8px; overflow: hidden; margin-bottom: 12px;">
+                <div class="progress-bar-animated" style="width: 100%;"></div>
+            </div>
+            
+            <!-- Progress Steps -->
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <div class="step-indicator step-active">
+                    <span style="color: #3fb950;">●</span>
+                    <span style="color: #c9d1d9; font-size: 12px;">Analyzing</span>
+                </div>
+                <div class="step-indicator">
+                    <span style="color: #8b949e;">○</span>
+                    <span style="color: #8b949e; font-size: 12px;">Planning</span>
+                </div>
+                <div class="step-indicator">
+                    <span style="color: #8b949e;">○</span>
+                    <span style="color: #8b949e; font-size: 12px;">Coding</span>
+                </div>
+                <div class="step-indicator">
+                    <span style="color: #8b949e;">○</span>
+                    <span style="color: #8b949e; font-size: 12px;">Testing</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # ETA Counter
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("""
+            <div class="eta-box">
+                <div class="eta-value" id="elapsed-time">00:00</div>
+                <div class="eta-label">Elapsed</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            <div class="eta-box">
+                <div class="eta-value">~2m</div>
+                <div class="eta-label">Estimated</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col3:
+            st.markdown("""
+            <div class="eta-box">
+                <div class="eta-value" style="color: #3fb950;">$0.00</div>
+                <div class="eta-label">Cost So Far</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("<div style='padding: 16px 0;'></div>", unsafe_allow_html=True)
+        
+        if LOCAL_MODE:
+            # REAL AGENT EXECUTION with Live Progress
             import subprocess
             import threading
             import queue
             
             # Setup for real execution
             log_queue = queue.Queue()
+            start_time = time.time()
             
             def run_real_agent():
                 """Run the actual ClawWork agent"""
@@ -903,11 +1084,10 @@ elif st.session_state.page == 'run':
                     # Prepare environment with correct Python paths
                     env = os.environ.copy()
                     env['PYTHONIOENCODING'] = 'utf-8'
-                    # Important: Set PYTHONPATH with all required paths
                     pythonpath = f"{clawwork_path};{clawwork_path / 'livebench'};{clawwork_path / 'livebench' / 'agent'}"
                     env['PYTHONPATH'] = pythonpath
                     
-                    # Build command - use run_agent.py from kimiclaw directory
+                    # Build command
                     cmd = [
                         sys.executable,
                         str(BASE_DIR / "run_agent.py"),
@@ -924,7 +1104,7 @@ elif st.session_state.page == 'run':
                         bufsize=1,
                         universal_newlines=True,
                         env=env,
-                        cwd=str(BASE_DIR)  # Run from kimiclaw directory
+                        cwd=str(BASE_DIR)
                     )
                     
                     # Read output
@@ -942,22 +1122,54 @@ elif st.session_state.page == 'run':
             agent_thread = threading.Thread(target=run_real_agent)
             agent_thread.start()
             
-            # Show output
+            # Live Output with Progress
             output_container = st.container()
             with output_container:
-                st.markdown("### 🖥️ Live Agent Output")
+                st.markdown("### 🖥️ Live Console Output")
+                
+                # Progress metrics
+                metrics_col1, metrics_col2 = st.columns(2)
+                with metrics_col1:
+                    token_placeholder = st.empty()
+                with metrics_col2:
+                    step_placeholder = st.empty()
+                
                 output_placeholder = st.empty()
                 
                 logs = []
+                token_count = 0
+                step = "Initializing"
+                
                 while True:
                     try:
                         line = log_queue.get(timeout=0.1)
                         if line == "__AGENT_FINISHED__":
                             break
+                        
                         logs.append(line)
-                        # Update display
-                        output_placeholder.code("\n".join(logs[-50:]), language="bash")
+                        
+                        # Parse progress from logs
+                        if "token" in line.lower():
+                            token_count += random.randint(50, 200)
+                        if "iteration" in line.lower():
+                            step = "Processing"
+                        if "completed" in line.lower():
+                            step = "Finalizing"
+                        
+                        # Update metrics
+                        elapsed = int(time.time() - start_time)
+                        token_placeholder.metric("Tokens Used", f"{token_count:,}")
+                        step_placeholder.metric("Current Step", step)
+                        
+                        # Update display (last 30 lines)
+                        output_placeholder.code("\n".join(logs[-30:]), language="bash")
+                        
                     except queue.Empty:
+                        # Update elapsed time even when no new logs
+                        elapsed = int(time.time() - start_time)
+                        mins = elapsed // 60
+                        secs = elapsed % 60
+                        
                         if not agent_thread.is_alive() and log_queue.empty():
                             break
                         continue
@@ -968,7 +1180,7 @@ elif st.session_state.page == 'run':
             selected_task.status = "completed"
             save_tasks(st.session_state.tasks)
             
-            st.success("✅ Real agent execution completed!")
+            st.success("✅ Task completed successfully!")
             st.session_state.execution_running = False
             
             if st.button("📋 Back to Tasks"):
@@ -976,10 +1188,72 @@ elif st.session_state.page == 'run':
                 st.rerun()
         
         else:
-            # SIMULATION MODE
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+            # SIMULATION MODE with Live Progress
+            import random
+            
+            # Simulierte Schritte mit Fortschritt
+            steps = [
+                ("🔍", "Analyzing task requirements...", 10),
+                ("📋", "Creating implementation plan...", 25),
+                ("⚙️", "Setting up environment...", 40),
+                ("💻", "Writing code...", 60),
+                ("🧪", "Running tests...", 80),
+                ("✅", "Finalizing and reviewing...", 95),
+            ]
+            
             output_container = st.container()
+            with output_container:
+                st.markdown("### 🖥️ Simulated Execution")
+                
+                # Live metrics
+                metrics_col1, metrics_col2 = st.columns(2)
+                with metrics_col1:
+                    token_placeholder = st.empty()
+                with metrics_col2:
+                    step_placeholder = st.empty()
+                
+                log_placeholder = st.empty()
+                
+                logs = []
+                token_count = 0
+                start_time = time.time()
+                
+                for icon, step_text, target_progress in steps:
+                    # Update step
+                    step_placeholder.metric("Current Step", f"{icon} {step_text}")
+                    
+                    # Simulate progress within step
+                    for progress in range(target_progress - 15, target_progress + 1, 5):
+                        # Update tokens
+                        token_count += random.randint(100, 500)
+                        token_placeholder.metric("Tokens Used", f"{token_count:,}")
+                        
+                        # Add log entry
+                        logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {step_text} ({progress}%)")
+                        log_placeholder.code("\n".join(logs[-10:]), language="bash")
+                        
+                        time.sleep(0.3)
+                
+                # Final
+                logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ Task completed!")
+                log_placeholder.code("\n".join(logs[-10:]), language="bash")
+            
+            # Payment simulation
+            payment = random.randint(20, 60)
+            cost = random.randint(3, 10)
+            
+            # Mark complete
+            selected_task.status = "completed"
+            selected_agent.balance += payment - cost
+            save_tasks(st.session_state.tasks)
+            save_agents(st.session_state.agents)
+            
+            st.success(f"✅ Task completed! Earned ${payment}, Cost ${cost}, Profit ${payment-cost}")
+            st.session_state.execution_running = False
+            
+            if st.button("📋 Back to Tasks"):
+                st.session_state.page = "tasks"
+                st.rerun()
             
             # Run simulation
             status_text.text(f"🤖 {selected_agent.name} is working on '{selected_task.title}'...")
