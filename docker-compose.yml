@@ -1,0 +1,57 @@
+# KimiClaw - Docker Compose
+# Starte den echten Agenten mit API Calls lokal
+
+version: '3.8'
+
+services:
+  kimiclaw:
+    build: .
+    container_name: kimiclaw-agent
+    ports:
+      - "8501:8501"
+    environment:
+      # API Configuration - Fülle diese aus!
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-your-key-here}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.moonshot.cn/v1}
+      - EVALUATION_API_KEY=${EVALUATION_API_KEY:-${OPENAI_API_KEY}}
+      - EVALUATION_API_BASE=${EVALUATION_API_BASE:-${OPENAI_API_BASE}}
+      
+      # Optional: Web Search
+      - WEB_SEARCH_API_KEY=${WEB_SEARCH_API_KEY:-}
+      
+      # Optional: Code Sandbox (E2B)
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - CODE_SANDBOX_PROVIDER=${CODE_SANDBOX_PROVIDER:-e2b}
+      
+      # System
+      - PYTHONIOENCODING=utf-8
+      - PYTHONUNBUFFERED=1
+    
+    volumes:
+      # Persist data between restarts
+      - ./data:/app/data
+      - ./memory:/app/memory
+      - ./work:/app/work
+    
+    restart: unless-stopped
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+# Optional: Add a database for production use
+#  db:
+#    image: postgres:15-alpine
+#    environment:
+#      POSTGRES_USER: kimiclaw
+#      POSTGRES_PASSWORD: secret
+#      POSTGRES_DB: kimiclaw
+#    volumes:
+#      - postgres_data:/var/lib/postgresql/data
+#
+#volumes:
+#  postgres_data:
