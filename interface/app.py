@@ -826,8 +826,11 @@ elif st.session_state.page == 'run':
     
     st.header("▶️ Agent Execution")
     
-    # Simulations-Modus Hinweis
-    st.info("🎮 **Simulation Mode**: Tasks are processed with AI-generated code examples. No real API calls.")
+    # Mode Hinweis
+    if LOCAL_MODE:
+        st.success("🚀 **LOCAL MODE**: Full ClawWork integration active! Real API calls enabled.")
+    else:
+        st.info("🎮 **Simulation Mode**: Tasks are processed with AI-generated code examples. No real API calls.")
     
     col1, col2 = st.columns([2, 1])
     
@@ -860,13 +863,14 @@ elif st.session_state.page == 'run':
     with col2:
         # Stats
         completed = len([t for t in st.session_state.tasks if t.status == "completed"])
+        mode_text = "🚀 Local (Real)" if LOCAL_MODE else "☁️ Simulation"
         st.markdown(f"""
         <div class="gh-card">
             <div class="gh-card-header">Session Stats</div>
             <div style="color: #8b949e; font-size: 14px;">
                 <div>Status: {'🟢 Running' if st.session_state.get('execution_running') else '⚪ Idle'}</div>
                 <div>Completed: {completed}</div>
-                <div>Mode: Simulation</div>
+                <div>Mode: {mode_text}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -875,49 +879,140 @@ elif st.session_state.page == 'run':
     st.markdown("<div style='padding: 16px 0;'></div>", unsafe_allow_html=True)
     
     if st.session_state.get('execution_running') and selected_task and selected_agent:
-        # Progress
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        output_container = st.container()
         
-        # Run simulation
-        status_text.text(f"🤖 {selected_agent.name} is working on '{selected_task.title}'...")
+        if LOCAL_MODE:
+            # REAL AGENT EXECUTION
+            st.info("🚀 Starting REAL agent execution...")
+            
+            import subprocess
+            import threading
+            import queue
+            
+            # Setup for real execution
+            log_queue = queue.Queue()
+            
+            def run_real_agent():
+                """Run the actual ClawWork agent"""
+                try:
+                    # Prepare environment
+                    env = os.environ.copy()
+                    env['PYTHONIOENCODING'] = 'utf-8'
+                    env['PYTHONPATH'] = str(clawwork_path)
+                    
+                    # Build command
+                    cmd = [
+                        sys.executable,
+                        str(BASE_DIR / "run_agent.py"),
+                        "work",
+                        "--days", "1"
+                    ]
+                    
+                    # Start process
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        universal_newlines=True,
+                        env=env,
+                        cwd=str(clawwork_path)
+                    )
+                    
+                    # Read output
+                    for line in process.stdout:
+                        log_queue.put(line.strip())
+                    
+                    process.wait()
+                    log_queue.put("__AGENT_FINISHED__")
+                    
+                except Exception as e:
+                    log_queue.put(f"Error: {str(e)}")
+                    log_queue.put("__AGENT_FINISHED__")
+            
+            # Start agent in thread
+            agent_thread = threading.Thread(target=run_real_agent)
+            agent_thread.start()
+            
+            # Show output
+            output_container = st.container()
+            with output_container:
+                st.markdown("### 🖥️ Live Agent Output")
+                output_placeholder = st.empty()
+                
+                logs = []
+                while True:
+                    try:
+                        line = log_queue.get(timeout=0.1)
+                        if line == "__AGENT_FINISHED__":
+                            break
+                        logs.append(line)
+                        # Update display
+                        output_placeholder.code("\n".join(logs[-50:]), language="bash")
+                    except queue.Empty:
+                        if not agent_thread.is_alive() and log_queue.empty():
+                            break
+                        continue
+                
+                agent_thread.join()
+            
+            # Mark complete
+            selected_task.status = "completed"
+            save_tasks(st.session_state.tasks)
+            
+            st.success("✅ Real agent execution completed!")
+            st.session_state.execution_running = False
+            
+            if st.button("📋 Back to Tasks"):
+                st.session_state.page = "tasks"
+                st.rerun()
         
-        payment, cost = simulate_agent_work(
-            selected_task.__dict__, 
-            selected_agent.__dict__, 
-            progress_bar, 
-            status_text, 
-            output_container
-        )
-        
-        # Mark complete
-        selected_task.status = "completed"
-        save_tasks(st.session_state.tasks)
-        
-        # Update agent balance
-        selected_agent.balance += payment - cost
-        save_agents(st.session_state.agents)
-        
-        st.success(f"✅ Task completed! Earned ${payment}, Cost ${cost}, Profit ${payment-cost}")
-        st.session_state.execution_running = False
-        
-        if st.button("📋 Back to Tasks"):
-            st.session_state.page = "tasks"
-            st.rerun()
+        else:
+            # SIMULATION MODE
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            output_container = st.container()
+            
+            # Run simulation
+            status_text.text(f"🤖 {selected_agent.name} is working on '{selected_task.title}'...")
+            
+            payment, cost = simulate_agent_work(
+                selected_task.__dict__, 
+                selected_agent.__dict__, 
+                progress_bar, 
+                status_text, 
+                output_container
+            )
+            
+            # Mark complete
+            selected_task.status = "completed"
+            save_tasks(st.session_state.tasks)
+            
+            # Update agent balance
+            selected_agent.balance += payment - cost
+            save_agents(st.session_state.agents)
+            
+            st.success(f"✅ Task completed! Earned ${payment}, Cost ${cost}, Profit ${payment-cost}")
+            st.session_state.execution_running = False
+            
+            if st.button("📋 Back to Tasks"):
+                st.session_state.page = "tasks"
+                st.rerun()
     
     else:
         # Empty terminal
-        st.markdown("""
+        terminal_title = "TERMINAL - LOCAL MODE" if LOCAL_MODE else "TERMINAL - SIMULATION MODE"
+        version_text = "KimiClaw Multi-Agent v3.0.0 (Local - Real API)" if LOCAL_MODE else "KimiClaw Multi-Agent v3.0.0 (Simulation)"
+        st.markdown(f"""
         <div style="margin-top: 24px;">
             <div style="background-color: #161b22; border: 1px solid #30363d; border-radius: 6px 6px 0 0; 
                         padding: 8px 16px; display: flex; align-items: center; gap: 8px;">
-                <span style="color: #8b949e; font-size: 12px;">TERMINAL - SIMULATION MODE</span>
+                <span style="color: #8b949e; font-size: 12px;">{terminal_title}</span>
                 <span style="color: #3fb950; font-size: 12px;">●</span>
             </div>
             <div class="terminal">
                 <div class="terminal-line"><span class="terminal-prompt">$</span> kimi-agent --version</div>
-                <div class="terminal-line">KimiClaw Multi-Agent v3.0.0 (Simulation)</div>
+                <div class="terminal-line">{version_text}</div>
                 <div class="terminal-line"></div>
                 <div class="terminal-line"><span class="terminal-prompt">$</span> kimi-agent status</div>
                 <div class="terminal-line">🤖 Agents: {0} active</div>
