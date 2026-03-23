@@ -17,6 +17,27 @@ from typing import List, Dict, Optional
 # Import virtual agent for simulation mode
 from virtual_agent import simulate_agent_work, quick_demo_task, VirtualAgent
 
+# Detect if running in local mode (ClawWork available) or cloud mode
+CLAWWORK_AVAILABLE = False
+LOCAL_MODE = False
+
+# Check if ClawWork exists locally
+clawwork_path = Path(__file__).parent.parent / "clawwork"
+if clawwork_path.exists():
+    sys.path.insert(0, str(clawwork_path))
+    sys.path.insert(0, str(clawwork_path / "livebench"))
+    try:
+        from livebench.agent.live_agent import LiveAgent
+        CLAWWORK_AVAILABLE = True
+        LOCAL_MODE = True
+    except ImportError:
+        pass
+
+if LOCAL_MODE:
+    print("🚀 Running in LOCAL MODE with full ClawWork integration")
+else:
+    print("☁️ Running in CLOUD MODE (simulation)")
+
 # Page config - Dark theme like GitHub
 st.set_page_config(
     page_title="KimiClaw | AI Code Agent",

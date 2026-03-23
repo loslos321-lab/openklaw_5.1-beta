@@ -1,0 +1,46 @@
+# KimiClaw Local - Full Requirements
+# Für lokale Nutzung mit echten API Calls
+
+# Core
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+python-dotenv>=1.0.0
+
+# LangChain & LLM
+langchain>=0.1.0
+langchain-openai>=0.0.2
+langchain-mcp-adapters>=0.1.0
+langgraph>=0.2.0
+openai>=1.0.0
+
+# API & Web
+fastapi>=0.104.0
+uvicorn>=0.24.0
+websockets>=12.0
+httpx>=0.25.0
+requests>=2.31.0
+
+# Code Execution
+e2b-code-interpreter>=1.0.0
+
+# Web Search
+tavily-python>=0.3.0
+
+# Document Generation
+python-docx>=1.0.0
+python-pptx>=0.6.21
+reportlab>=4.0.0
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+pdf2image>=1.16.0
+Pillow>=10.0.0
+
+# Data
+pyarrow>=14.0.0
+aiofiles>=23.2.1
+
+# Utils
+pyyaml>=6.0.0
+jinja2>=3.1.0
+tiktoken>=0.5.0

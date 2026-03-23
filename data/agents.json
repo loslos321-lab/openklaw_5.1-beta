@@ -1,0 +1,34 @@
+[
+  {
+    "id": "agent-1",
+    "name": "CodeMaster",
+    "role": "Senior Developer",
+    "avatar": "\ud83d\udc68\u200d\ud83d\udcbb",
+    "status": "idle",
+    "model": "gpt-4",
+    "skills": [
+      "Python",
+      "JavaScript",
+      "FastAPI",
+      "Database"
+    ],
+    "created_at": "2026-03-23T17:47:38.814392",
+    "balance": 162.0
+  },
+  {
+    "id": "agent-2",
+    "name": "DataWizard",
+    "role": "Data Engineer",
+    "avatar": "\ud83d\udd2e",
+    "status": "idle",
+    "model": "claude-3",
+    "skills": [
+      "Pandas",
+      "SQL",
+      "ETL",
+      "Visualization"
+    ],
+    "created_at": "2026-03-23T17:47:38.814414",
+    "balance": 100.0
+  }
+]
