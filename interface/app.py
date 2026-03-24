@@ -754,9 +754,45 @@ elif st.session_state.page == 'agents':
             </div>
             """, unsafe_allow_html=True)
             
-            if st.button("💬 Chat", key=f"chat_{agent.id}", use_container_width=True):
-                st.session_state.current_agent = agent
-                st.session_state.page = "chat"
+            col_chat, col_delete = st.columns(2)
+            with col_chat:
+                if st.button("💬 Chat", key=f"chat_{agent.id}", use_container_width=True):
+                    st.session_state.current_agent = agent
+                    st.session_state.page = "chat"
+                    st.rerun()
+            with col_delete:
+                if st.button("🗑️ Delete", key=f"delete_{agent.id}", use_container_width=True, type="secondary"):
+                    st.session_state.agent_to_delete = agent
+                    st.rerun()
+    
+    # Delete Agent Confirmation Dialog
+    if hasattr(st.session_state, 'agent_to_delete') and st.session_state.agent_to_delete:
+        agent = st.session_state.agent_to_delete
+        st.warning(f"Are you sure you want to delete agent '{agent.name}'?")
+        col_confirm, col_cancel = st.columns(2)
+        with col_confirm:
+            if st.button("✓ Confirm Delete", type="primary"):
+                # Remove agent from list
+                st.session_state.agents = [a for a in st.session_state.agents if a.id != agent.id]
+                save_agents(st.session_state.agents)
+                
+                # Clean up agent directories
+                import shutil
+                agent_dirs = [
+                    BASE_DIR / "data" / agent.id,
+                    BASE_DIR / "memory" / agent.id,
+                    BASE_DIR / "work" / agent.id,
+                ]
+                for dir_path in agent_dirs:
+                    if dir_path.exists():
+                        shutil.rmtree(dir_path)
+                
+                st.session_state.agent_to_delete = None
+                st.success(f"Agent '{agent.name}' deleted successfully!")
+                st.rerun()
+        with col_cancel:
+            if st.button("Cancel"):
+                st.session_state.agent_to_delete = None
                 st.rerun()
 
 # ==================== CHAT ====================

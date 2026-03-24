@@ -26,6 +26,85 @@ services:
       # System
       - PYTHONIOENCODING=utf-8
       - PYTHONUNBUFFERED=1
+      - AGENT_ID=kimiclaw
+    
+    volumes:
+      # Persist data between restarts
+      - ./data:/app/data
+      - ./memory:/app/memory
+      - ./work:/app/work
+    
+    restart: unless-stopped
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # Agent0 - Secondary Agent Container
+  agent0:
+    build: .
+    container_name: agent0
+    ports:
+      - "8502:8501"
+    environment:
+      # API Configuration - Shared with kimiclaw
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-your-key-here}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.moonshot.cn/v1}
+      - EVALUATION_API_KEY=${EVALUATION_API_KEY:-${OPENAI_API_KEY}}
+      - EVALUATION_API_BASE=${EVALUATION_API_BASE:-${OPENAI_API_BASE}}
+      
+      # Optional: Web Search
+      - WEB_SEARCH_API_KEY=${WEB_SEARCH_API_KEY:-}
+      
+      # Optional: Code Sandbox (E2B)
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - CODE_SANDBOX_PROVIDER=${CODE_SANDBOX_PROVIDER:-e2b}
+      
+      # System
+      - PYTHONIOENCODING=utf-8
+      - PYTHONUNBUFFERED=1
+      - AGENT_ID=agent0
+    
+    volumes:
+      # Agent0 has its own data directory
+      - ./data/agent0:/app/data
+      - ./memory/agent0:/app/memory
+      - ./work/agent0:/app/work
+    
+    restart: unless-stopped
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
+# networks:
+#   default:
+#     name: openklaw-network
+    environment:
+      # API Configuration - Fülle diese aus!
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-your-key-here}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.moonshot.cn/v1}
+      - EVALUATION_API_KEY=${EVALUATION_API_KEY:-${OPENAI_API_KEY}}
+      - EVALUATION_API_BASE=${EVALUATION_API_BASE:-${OPENAI_API_BASE}}
+      
+      # Optional: Web Search
+      - WEB_SEARCH_API_KEY=${WEB_SEARCH_API_KEY:-}
+      
+      # Optional: Code Sandbox (E2B)
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - CODE_SANDBOX_PROVIDER=${CODE_SANDBOX_PROVIDER:-e2b}
+      
+      # System
+      - PYTHONIOENCODING=utf-8
+      - PYTHONUNBUFFERED=1
     
     volumes:
       # Persist data between restarts
