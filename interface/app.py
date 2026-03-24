@@ -418,6 +418,12 @@ if 'show_new_task' not in st.session_state:
     st.session_state.show_new_task = False
 if 'show_new_agent' not in st.session_state:
     st.session_state.show_new_agent = False
+if 'launch_queue' not in st.session_state:
+    st.session_state.launch_queue = []
+if 'launch_running' not in st.session_state:
+    st.session_state.launch_running = False
+if 'current_launch_index' not in st.session_state:
+    st.session_state.current_launch_index = 0
 
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -881,6 +887,74 @@ elif st.session_state.page == 'tasks':
         if st.button("➕ New Task", use_container_width=True, type="primary"):
             st.session_state.show_new_task = True
     
+    # Launch Queue Sidebar
+    with st.sidebar:
+        st.markdown("""
+        <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <div style="font-weight: 600; color: #c9d1d9; margin-bottom: 12px;">🚀 Launch Queue</div>
+        """, unsafe_allow_html=True)
+        
+        if not st.session_state.launch_queue:
+            st.markdown("<div style='color: #8b949e; font-size: 12px;'>Queue is empty</div>", unsafe_allow_html=True)
+        else:
+            for i, task_id in enumerate(st.session_state.launch_queue):
+                task = next((t for t in st.session_state.tasks if t.id == task_id), None)
+                if task:
+                    is_current = i == st.session_state.current_launch_index and st.session_state.launch_running
+                    bg_color = "#238636" if is_current else "#21262d"
+                    st.markdown(f"""
+                    <div style="background: {bg_color}; border: 1px solid #30363d; border-radius: 4px; 
+                                padding: 8px; margin-bottom: 4px; font-size: 12px;">
+                        <div style="color: #c9d1d9;">{i+1}. {task.title}</div>
+                        <div style="color: #8b949e; font-size: 10px;">{task.status}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Launch controls
+        if st.session_state.launch_queue and not st.session_state.launch_running:
+            if st.button("▶️ Launch All", use_container_width=True, type="primary"):
+                st.session_state.launch_running = True
+                st.session_state.current_launch_index = 0
+                st.rerun()
+        
+        if st.session_state.launch_running:
+            if st.button("⏹️ Stop", use_container_width=True, type="secondary"):
+                st.session_state.launch_running = False
+                st.rerun()
+            
+            # Progress
+            progress = st.session_state.current_launch_index / len(st.session_state.launch_queue)
+            st.progress(progress, text=f"{st.session_state.current_launch_index}/{len(st.session_state.launch_queue)}")
+        
+        if st.session_state.launch_queue and not st.session_state.launch_running:
+            if st.button("🗑️ Clear Queue", use_container_width=True):
+                st.session_state.launch_queue = []
+                st.session_state.current_launch_index = 0
+                st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Auto-process launch queue
+    if st.session_state.launch_running and st.session_state.launch_queue:
+        if st.session_state.current_launch_index < len(st.session_state.launch_queue):
+            current_task_id = st.session_state.launch_queue[st.session_state.current_launch_index]
+            current_task = next((t for t in st.session_state.tasks if t.id == current_task_id), None)
+            
+            if current_task:
+                if current_task.status == "pending":
+                    current_task.status = "running"
+                    save_tasks(st.session_state.tasks)
+                elif current_task.status == "completed":
+                    st.session_state.current_launch_index += 1
+                    save_tasks(st.session_state.tasks)
+                # If running, wait for it to complete (in real implementation this would check agent status)
+            else:
+                st.session_state.current_launch_index += 1
+        else:
+            st.session_state.launch_running = False
+            st.session_state.current_launch_index = 0
+            st.success("✅ Launch queue completed!")
+    
     # New Task Form
     if st.session_state.show_new_task:
         with st.expander("Create New Task", expanded=True):
@@ -962,7 +1036,17 @@ elif st.session_state.page == 'tasks':
         if not pending_tasks:
             st.info("No pending tasks")
         for task in pending_tasks:
-            st.markdown(f"- {task.title}")
+            col_task, col_add = st.columns([4, 1])
+            with col_task:
+                st.markdown(f"- {task.title}")
+            with col_add:
+                if st.button("➕ Queue", key=f"pending_queue_{task.id}"):
+                    if task.id not in st.session_state.launch_queue:
+                        st.session_state.launch_queue.append(task.id)
+                        st.success("Added!")
+                        st.rerun()
+                    else:
+                        st.warning("Already in queue!")
     
     with tab3:
         completed_tasks = [t for t in st.session_state.tasks if t.status == "completed"]
