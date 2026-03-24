@@ -548,7 +548,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # NAVIGATION
-col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 1, 1, 2])
+col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 1, 1, 1, 1, 1, 2])
 
 nav_items = [
     ("📊", "Dashboard", "dashboard"),
@@ -560,7 +560,7 @@ nav_items = [
 ]
 
 for i, (icon, label, page) in enumerate(nav_items):
-    with [col1, col2, col3, col4, col5][i]:
+    with [col1, col2, col3, col4, col5, col6][i]:
         is_active = st.session_state.page == page
         if st.button(f"{icon} {label}", use_container_width=True,
                     type="primary" if is_active else "secondary"):
