@@ -1180,7 +1180,7 @@ elif st.session_state.page == 'run':
                 
                 while True:
                     try:
-                        line = log_queue.get(timeout=100)
+                        line = log_queue.get(timeout=0.1)
                         if line == "__AGENT_FINISHED__":
                             break
                         
@@ -1591,4 +1591,4 @@ st.markdown("""
     🦞 KimiClaw v3.0.0-multiagent | Multi-Agent IDE | 
     <a href="https://github.com/loslos321-lab/openklaw_5.1-beta" style="color: #58a6ff;">GitHub</a>
 </div>
-""", unsafe_allow_html=False)
+""", unsafe_allow_html=True)
