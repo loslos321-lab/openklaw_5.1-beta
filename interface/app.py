@@ -432,6 +432,10 @@ if 'launch_running' not in st.session_state:
     st.session_state.launch_running = False
 if 'current_launch_index' not in st.session_state:
     st.session_state.current_launch_index = 0
+if 'k8s_deployments' not in st.session_state:
+    st.session_state.k8s_deployments = []
+if 'botnets' not in st.session_state:
+    st.session_state.botnets = []
 
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -461,6 +465,28 @@ class Task:
     assigned_agent: Optional[str]
     created_at: str
     priority: str = "medium"
+
+@dataclass
+class K8sDeployment:
+    id: str
+    name: str
+    namespace: str
+    replicas: int
+    image: str
+    status: str  # pending, deploying, running, failed
+    agent_id: str
+    created_at: str
+    botnet_id: Optional[str] = None
+
+@dataclass
+class Botnet:
+    id: str
+    name: str
+    description: str
+    agent_ids: List[str]
+    status: str  # idle, deploying, active, stopped
+    created_at: str
+    deployment_count: int = 0
 
 # DATABASE FUNCTIONS
 def save_agents(agents: List[Agent]):
@@ -562,7 +588,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # NAVIGATION
-col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 1, 1, 1, 1, 1, 2])
+col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 1, 1, 1, 1, 1, 1, 2])
 
 nav_items = [
     ("📊", "Dashboard", "dashboard"),
@@ -571,17 +597,18 @@ nav_items = [
     ("📋", "Tasks", "tasks"),
     ("▶️", "Run", "run"),
     ("🖥️", "Monitor", "monitor"),
+    ("☸️", "K8s", "kubernetes"),
 ]
 
 for i, (icon, label, page) in enumerate(nav_items):
-    with [col1, col2, col3, col4, col5, col6][i]:
+    with [col1, col2, col3, col4, col5, col6, col7][i]:
         is_active = st.session_state.page == page
         if st.button(f"{icon} {label}", use_container_width=True,
                     type="primary" if is_active else "secondary"):
             st.session_state.page = page
             st.rerun()
 
-with col7:
+with col8:
     running_agents = len([a for a in st.session_state.agents if a.status == "running"])
     st.markdown(f"""
     <div style="text-align: right; padding-top: 8px;">
@@ -1405,7 +1432,7 @@ elif st.session_state.page == 'run':
             save_agents(st.session_state.agents)
             
             st.success(f"✅ Task completed! Earned ${payment}, Cost ${cost}, Profit ${payment-cost}")
-            st.session_state.execution_running = False
+            st.session_state.execution_running = True
             
             if st.button("📋 Back to Tasks"):
                 st.session_state.page = "tasks"
@@ -1675,6 +1702,280 @@ elif st.session_state.page == 'monitor':
     if auto_refresh:
         time.sleep(0.1)  # Small delay to prevent excessive CPU usage
         st.rerun()
+
+# ==================== KUBERNETES / BOTNET ====================
+elif st.session_state.page == 'kubernetes':
+    st.markdown("<div style='padding: 24px 0;'></div>", unsafe_allow_html=True)
+    
+    st.header("☸️ Kubernetes Botnet Orchestrator")
+    st.caption("Deploy and manage distributed agent botnets on Kubernetes")
+    
+    # Tabs for different sections
+    tab_botnets, tab_deployments, tab_agents = st.tabs(["🕸️ Botnets", "📦 Deployments", "🤖 Agent Pool"])
+    
+    with tab_botnets:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.subheader("Botnet Clusters")
+        with col2:
+            if st.button("➕ Create Botnet", type="primary", use_container_width=True):
+                st.session_state.show_new_botnet = True
+        
+        # Create Botnet Form
+        if st.session_state.get('show_new_botnet', False):
+            with st.expander("Create New Botnet", expanded=True):
+                with st.form("new_botnet"):
+                    botnet_name = st.text_input("Botnet Name", placeholder="e.g., DataProcessingSwarm")
+                    botnet_desc = st.text_area("Description", placeholder="Purpose of this botnet cluster...")
+                    
+                    # Select agents for this botnet
+                    available_agents = [a for a in st.session_state.agents if a.status == "idle"]
+                    selected_agents = st.multiselect(
+                        "Assign Agents to Botnet",
+                        options=[f"{a.avatar} {a.name}" for a in available_agents],
+                        help="Select agents to include in this botnet"
+                    )
+                    
+                    col_create, col_cancel = st.columns([1, 5])
+                    with col_create:
+                        if st.form_submit_button("Create", type="primary"):
+                            if botnet_name and selected_agents:
+                                new_botnet = Botnet(
+                                    id=f"botnet-{uuid.uuid4().hex[:8]}",
+                                    name=botnet_name,
+                                    description=botnet_desc,
+                                    agent_ids=[a.id for a in available_agents if f"{a.avatar} {a.name}" in selected_agents],
+                                    status="idle",
+                                    created_at=datetime.now().isoformat(),
+                                    deployment_count=0
+                                )
+                                st.session_state.botnets.append(new_botnet)
+                                st.session_state.show_new_botnet = False
+                                st.success(f"Botnet '{botnet_name}' created with {len(selected_agents)} agents!")
+                                st.rerun()
+                    with col_cancel:
+                        if st.form_submit_button("Cancel"):
+                            st.session_state.show_new_botnet = False
+                            st.rerun()
+        
+        # Display Botnets
+        if not st.session_state.botnets:
+            st.info("No botnets created yet. Create a botnet to orchestrate multiple agents.")
+        else:
+            for botnet in st.session_state.botnets:
+                status_colors = {
+                    "idle": "#8b949e",
+                    "deploying": "#f78166",
+                    "active": "#3fb950",
+                    "stopped": "#f85149"
+                }
+                status_color = status_colors.get(botnet.status, "#8b949e")
+                
+                # Get assigned agents
+                assigned_agents = [a for a in st.session_state.agents if a.id in botnet.agent_ids]
+                agent_count = len(assigned_agents)
+                
+                with st.expander(f"🕸️ {botnet.name} ({agent_count} agents)"):
+                    col_info, col_actions = st.columns([3, 1])
+                    
+                    with col_info:
+                        st.markdown(f"**Description:** {botnet.description}")
+                        st.markdown(f"**Status:** <span style='color: {status_color};'>● {botnet.status.upper()}</span>", unsafe_allow_html=True)
+                        st.markdown(f"**Created:** {botnet.created_at[:19]}")
+                        st.markdown(f"**Deployments:** {botnet.deployment_count}")
+                        
+                        st.markdown("**Assigned Agents:**")
+                        for agent in assigned_agents:
+                            st.markdown(f"- {agent.avatar} {agent.name} ({agent.role})")
+                    
+                    with col_actions:
+                        if botnet.status == "idle":
+                            if st.button("🚀 Deploy", key=f"deploy_{botnet.id}", use_container_width=True):
+                                botnet.status = "deploying"
+                                st.rerun()
+                        elif botnet.status == "active":
+                            if st.button("⏹️ Stop", key=f"stop_{botnet.id}", use_container_width=True):
+                                botnet.status = "stopped"
+                                st.rerun()
+                            if st.button("🔄 Restart", key=f"restart_{botnet.id}", use_container_width=True):
+                                botnet.status = "deploying"
+                                st.rerun()
+                        elif botnet.status == "stopped":
+                            if st.button("▶️ Start", key=f"start_{botnet.id}", use_container_width=True):
+                                botnet.status = "active"
+                                st.rerun()
+                        
+                        if st.button("🗑️ Delete", key=f"delete_botnet_{botnet.id}", use_container_width=True):
+                            st.session_state.botnets.remove(botnet)
+                            st.rerun()
+    
+    with tab_deployments:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.subheader("Kubernetes Deployments")
+        with col2:
+            if st.button("➕ New Deployment", type="primary", use_container_width=True):
+                st.session_state.show_new_deployment = True
+        
+        # Create Deployment Form
+        if st.session_state.get('show_new_deployment', False):
+            with st.expander("Create K8s Deployment", expanded=True):
+                with st.form("new_k8s_deployment"):
+                    dep_name = st.text_input("Deployment Name", placeholder="e.g., crawler-deployment")
+                    dep_namespace = st.text_input("Namespace", value="default")
+                    dep_image = st.text_input("Container Image", placeholder="e.g., myapp:latest")
+                    dep_replicas = st.number_input("Replicas", min_value=1, max_value=100, value=3)
+                    
+                    # Select botnet to deploy to
+                    botnet_options = [f"🕸️ {b.name}" for b in st.session_state.botnets if b.status in ["idle", "active"]]
+                    if botnet_options:
+                        selected_botnet = st.selectbox("Deploy to Botnet", botnet_options)
+                    else:
+                        st.warning("No active botnets available. Create a botnet first.")
+                        selected_botnet = None
+                    
+                    col_create, col_cancel = st.columns([1, 5])
+                    with col_create:
+                        if st.form_submit_button("Deploy", type="primary"):
+                            if dep_name and selected_botnet:
+                                botnet_name = selected_botnet.replace("🕸️ ", "")
+                                botnet = next((b for b in st.session_state.botnets if b.name == botnet_name), None)
+                                
+                                new_dep = K8sDeployment(
+                                    id=f"k8s-{uuid.uuid4().hex[:8]}",
+                                    name=dep_name,
+                                    namespace=dep_namespace,
+                                    replicas=dep_replicas,
+                                    image=dep_image,
+                                    status="pending",
+                                    agent_id=botnet.agent_ids[0] if botnet and botnet.agent_ids else "",
+                                    created_at=datetime.now().isoformat(),
+                                    botnet_id=botnet.id if botnet else None
+                                )
+                                st.session_state.k8s_deployments.append(new_dep)
+                                if botnet:
+                                    botnet.deployment_count += 1
+                                st.session_state.show_new_deployment = False
+                                st.success(f"Deployment '{dep_name}' created!")
+                                st.rerun()
+                    with col_cancel:
+                        if st.form_submit_button("Cancel"):
+                            st.session_state.show_new_deployment = False
+                            st.rerun()
+        
+        # Display Deployments
+        if not st.session_state.k8s_deployments:
+            st.info("No Kubernetes deployments yet.")
+        else:
+            for dep in st.session_state.k8s_deployments:
+                status_colors = {
+                    "pending": "#8b949e",
+                    "deploying": "#f78166",
+                    "running": "#3fb950",
+                    "failed": "#f85149"
+                }
+                status_color = status_colors.get(dep.status, "#8b949e")
+                
+                with st.expander(f"📦 {dep.name} ({dep.namespace})"):
+                    col_info, col_actions = st.columns([3, 1])
+                    
+                    with col_info:
+                        st.markdown(f"**Image:** `{dep.image}`")
+                        st.markdown(f"**Replicas:** {dep.replicas}")
+                        st.markdown(f"**Status:** <span style='color: {status_color};'>● {dep.status.upper()}</span>", unsafe_allow_html=True)
+                        st.markdown(f"**Created:** {dep.created_at[:19]}")
+                        
+                        # Show assigned botnet
+                        if dep.botnet_id:
+                            botnet = next((b for b in st.session_state.botnets if b.id == dep.botnet_id), None)
+                            if botnet:
+                                st.markdown(f"**Managed by Botnet:** {botnet.name}")
+                    
+                    with col_actions:
+                        if dep.status == "pending":
+                            if st.button("▶️ Start", key=f"start_dep_{dep.id}", use_container_width=True):
+                                dep.status = "deploying"
+                                st.rerun()
+                        elif dep.status == "failed":
+                            if st.button("🔄 Retry", key=f"retry_dep_{dep.id}", use_container_width=True):
+                                dep.status = "deploying"
+                                st.rerun()
+                        elif dep.status == "running":
+                            if st.button("⏹️ Stop", key=f"stop_dep_{dep.id}", use_container_width=True):
+                                dep.status = "pending"
+                                st.rerun()
+                        
+                        if st.button("🗑️ Delete", key=f"delete_dep_{dep.id}", use_container_width=True):
+                            st.session_state.k8s_deployments.remove(dep)
+                            st.rerun()
+                        
+                        # Generate K8s YAML
+                        if st.button("📄 View YAML", key=f"yaml_{dep.id}", use_container_width=True):
+                            yaml_content = f"""apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {dep.name}
+  namespace: {dep.namespace}
+spec:
+  replicas: {dep.replicas}
+  selector:
+    matchLabels:
+      app: {dep.name}
+  template:
+    metadata:
+      labels:
+        app: {dep.name}
+    spec:
+      containers:
+      - name: app
+        image: {dep.image}
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+"""
+                            st.code(yaml_content, language="yaml")
+    
+    with tab_agents:
+        st.subheader("Available Agent Pool")
+        
+        # Show agent pool stats
+        idle_agents = [a for a in st.session_state.agents if a.status == "idle"]
+        busy_agents = [a for a in st.session_state.agents if a.status in ["running", "busy"]]
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Idle Agents", len(idle_agents))
+        with col2:
+            st.metric("Busy Agents", len(busy_agents))
+        with col3:
+            st.metric("Total Agents", len(st.session_state.agents))
+        
+        # Quick actions for agents
+        st.markdown("<div style='padding: 16px 0;'></div>", unsafe_allow_html=True)
+        
+        for agent in st.session_state.agents:
+            col_agent, col_status, col_action = st.columns([3, 1, 1])
+            
+            with col_agent:
+                status_dot = "🟢" if agent.status == "idle" else "🟠" if agent.status == "running" else "⚪"
+                st.markdown(f"{agent.avatar} **{agent.name}** ({agent.role})")
+            
+            with col_status:
+                st.markdown(f"{status_dot} {agent.status.upper()}")
+            
+            with col_action:
+                # Check if agent is in any botnet
+                in_botnet = any(agent.id in b.agent_ids for b in st.session_state.botnets)
+                if in_botnet:
+                    st.markdown("✅ In Botnet")
+                else:
+                    if st.button("➕ Assign", key=f"assign_k8s_{agent.id}"):
+                        st.session_state.selected_agent_for_botnet = agent
+                        st.rerun()
 
 # Footer
 st.markdown("<div style='padding: 32px 0;'></div>", unsafe_allow_html=True)
