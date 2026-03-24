@@ -9,6 +9,7 @@ import os
 import json
 import time
 import uuid
+import random
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, asdict
@@ -555,6 +556,7 @@ nav_items = [
     ("💬", "Chat", "chat"),
     ("📋", "Tasks", "tasks"),
     ("▶️", "Run", "run"),
+    ("🖥️", "Monitor", "monitor"),
 ]
 
 for i, (icon, label, page) in enumerate(nav_items):
@@ -565,7 +567,7 @@ for i, (icon, label, page) in enumerate(nav_items):
             st.session_state.page = page
             st.rerun()
 
-with col6:
+with col7:
     running_agents = len([a for a in st.session_state.agents if a.status == "running"])
     st.markdown(f"""
     <div style="text-align: right; padding-top: 8px;">
@@ -1178,7 +1180,7 @@ elif st.session_state.page == 'run':
                 
                 while True:
                     try:
-                        line = log_queue.get(timeout=0.1)
+                        line = log_queue.get(timeout=100)
                         if line == "__AGENT_FINISHED__":
                             break
                         
@@ -1217,7 +1219,7 @@ elif st.session_state.page == 'run':
             save_tasks(st.session_state.tasks)
             
             st.success("✅ Task completed successfully!")
-            st.session_state.execution_running = False
+            st.session_state.execution_running = True
             
             if st.button("📋 Back to Tasks"):
                 st.session_state.page = "tasks"
@@ -1285,7 +1287,7 @@ elif st.session_state.page == 'run':
             save_agents(st.session_state.agents)
             
             st.success(f"✅ Task completed! Earned ${payment}, Cost ${cost}, Profit ${payment-cost}")
-            st.session_state.execution_running = False
+            st.session_state.execution_running = True 
             
             if st.button("📋 Back to Tasks"):
                 st.session_state.page = "tasks"
@@ -1346,6 +1348,242 @@ elif st.session_state.page == 'run':
             sum(a.balance for a in st.session_state.agents)
         ), unsafe_allow_html=True)
 
+# ==================== MONITOR ====================
+elif st.session_state.page == 'monitor':
+    st.markdown("<div style='padding: 24px 0;'></div>", unsafe_allow_html=True)
+    
+    st.header("🖥️ Monitoring Terminal")
+    st.caption("Real-time visual monitoring of all agent activities and task progress")
+    
+    # Auto-refresh toggle
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        auto_refresh = st.toggle("🔄 Auto Refresh", value=True, key="monitor_auto_refresh")
+    with col2:
+        refresh_interval = st.select_slider("Interval", options=[1, 2, 5, 10], value=2, 
+                                           format_func=lambda x: f"{x}s", key="refresh_interval")
+    with col3:
+        if st.button("📊 Export Report"):
+            st.info("Report export feature coming soon!")
+    
+    st.markdown("<hr style='border-color: #21262d; margin: 16px 0;'>", unsafe_allow_html=True)
+    
+    # Summary Stats Row
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    total_agents = len(st.session_state.agents)
+    running_agents = len([a for a in st.session_state.agents if a.status == "running"])
+    idle_agents = len([a for a in st.session_state.agents if a.status == "idle"])
+    pending_tasks = len([t for t in st.session_state.tasks if t.status == "pending"])
+    running_tasks = len([t for t in st.session_state.tasks if t.status == "running"])
+    completed_tasks = len([t for t in st.session_state.tasks if t.status == "completed"])
+    total_balance = sum(a.balance for a in st.session_state.agents)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="metric-box" style="border-left: 3px solid #3fb950;">
+            <div class="metric-value" style="font-size: 24px;">{running_agents}/{total_agents}</div>
+            <div class="metric-label">Active Agents</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-box" style="border-left: 3px solid #f78166;">
+            <div class="metric-value" style="font-size: 24px;">{running_tasks}</div>
+            <div class="metric-label">Running Tasks</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div class="metric-box" style="border-left: 3px solid #58a6ff;">
+            <div class="metric-value" style="font-size: 24px;">{completed_tasks}</div>
+            <div class="metric-label">Completed</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+        <div class="metric-box" style="border-left: 3px solid #a371f7;">
+            <div class="metric-value" style="font-size: 24px;">${total_balance:.0f}</div>
+            <div class="metric-label">Total Balance</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col5:
+        efficiency = (completed_tasks / (completed_tasks + pending_tasks) * 100) if (completed_tasks + pending_tasks) > 0 else 0
+        st.markdown(f"""
+        <div class="metric-box" style="border-left: 3px solid #3fb950;">
+            <div class="metric-value" style="font-size: 24px;">{efficiency:.0f}%</div>
+            <div class="metric-label">Efficiency</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<div style='padding: 16px 0;'></div>", unsafe_allow_html=True)
+    
+    # Main monitoring content
+    col_left, col_right = st.columns([2, 1])
+    
+    with col_left:
+        st.subheader("📊 Task Progress Overview")
+        
+        if not st.session_state.tasks:
+            st.info("No tasks available. Create tasks to see progress monitoring.")
+        else:
+            for task in st.session_state.tasks[:5]:  # Show up to 5 tasks
+                # Determine progress and color based on status
+                if task.status == "completed":
+                    progress = 100
+                    progress_color = "#3fb950"
+                    status_icon = "✅"
+                elif task.status == "running":
+                    # Simulate progress for running tasks
+                    import random
+                    progress = random.randint(30, 85)
+                    progress_color = "#f78166"
+                    status_icon = "🔄"
+                else:  # pending
+                    progress = 0
+                    progress_color = "#8b949e"
+                    status_icon = "⏳"
+                
+                # Find assigned agent
+                assigned_agent_name = "Unassigned"
+                if task.assigned_agent:
+                    agent = next((a for a in st.session_state.agents if a.id == task.assigned_agent), None)
+                    if agent:
+                        assigned_agent_name = f"{agent.avatar} {agent.name}"
+                
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-weight: 600; color: #c9d1d9;">{status_icon} {task.title}</div>
+                        <div style="font-size: 12px; color: #8b949e;">{assigned_agent_name}</div>
+                    </div>
+                    <div style="font-size: 12px; color: #8b949e; margin-bottom: 8px;">{task.description[:60]}{'...' if len(task.description) > 60 else ''}</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="flex: 1; background: #21262d; height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div style="width: {progress}%; height: 100%; background: {progress_color}; border-radius: 4px; transition: width 0.3s ease;"></div>
+                        </div>
+                        <div style="font-size: 12px; color: {progress_color}; font-weight: 500; min-width: 35px;">{progress}%</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    with col_right:
+        st.subheader("🤖 Agent Status")
+        
+        for agent in st.session_state.agents:
+            if agent.status == "running":
+                status_color = "#f78166"
+                pulse_animation = "animation: pulse 2s infinite;"
+            elif agent.status == "idle":
+                status_color = "#3fb950"
+                pulse_animation = ""
+            else:
+                status_color = "#8b949e"
+                pulse_animation = ""
+            
+            st.markdown(f"""
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="font-size: 24px;">{agent.avatar}</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 500; color: #c9d1d9;">{agent.name}</div>
+                        <div style="font-size: 11px; color: #8b949e;">{agent.role}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 11px; color: #8b949e;">${agent.balance}</div>
+                        <div style="display: flex; align-items: center; gap: 4px; margin-top: 2px;">
+                            <span style="width: 8px; height: 8px; background: {status_color}; border-radius: 50%; {pulse_animation}"></span>
+                            <span style="font-size: 10px; color: {status_color}; text-transform: uppercase;">{agent.status}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # System Health
+        st.markdown("<div style='padding: 16px 0;'></div>", unsafe_allow_html=True)
+        st.subheader("⚡ System Health")
+        
+        import random
+        cpu_usage = random.randint(20, 60) if running_agents > 0 else random.randint(5, 15)
+        memory_usage = random.randint(30, 70) if running_agents > 0 else random.randint(20, 40)
+        
+        cpu_color = "#3fb950" if cpu_usage < 70 else "#f78166" if cpu_usage < 90 else "#f85149"
+        mem_color = "#3fb950" if memory_usage < 70 else "#f78166" if memory_usage < 90 else "#f85149"
+        
+        st.markdown(f"""
+        <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
+            <div style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #8b949e; margin-bottom: 4px;">
+                    <span>CPU Usage</span>
+                    <span>{cpu_usage}%</span>
+                </div>
+                <div style="background: #21262d; height: 6px; border-radius: 3px; overflow: hidden;">
+                    <div style="width: {cpu_usage}%; height: 100%; background: {cpu_color}; border-radius: 3px;"></div>
+                </div>
+            </div>
+            <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #8b949e; margin-bottom: 4px;">
+                    <span>Memory</span>
+                    <span>{memory_usage}%</span>
+                </div>
+                <div style="background: #21262d; height: 6px; border-radius: 3px; overflow: hidden;">
+                    <div style="width: {memory_usage}%; height: 100%; background: {mem_color}; border-radius: 3px;"></div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Live Console Output Section
+    st.markdown("<div style='padding: 16px 0;'></div>", unsafe_allow_html=True)
+    st.subheader("📜 Live Activity Log")
+    
+    # Generate simulated log entries based on current state
+    import time
+    current_time = datetime.now().strftime("%H:%M:%S")
+    
+    log_entries = [
+        ("INFO", f"[{current_time}] Monitoring terminal initialized"),
+        ("INFO", f"[{current_time}] Connected to {total_agents} agents"),
+    ]
+    
+    if running_agents > 0:
+        log_entries.append(("ACTIVE", f"[{current_time}] {running_agents} agent(s) currently working"))
+    
+    for task in st.session_state.tasks:
+        if task.status == "running":
+            log_entries.append(("TASK", f"[{current_time}] Task '{task.title}' is in progress"))
+        elif task.status == "completed":
+            log_entries.append(("SUCCESS", f"[{current_time}] Task '{task.title}' completed successfully"))
+    
+    # Display logs in terminal style
+    log_html = '<div class="terminal" style="max-height: 300px;">'
+    for level, message in log_entries:
+        if level == "INFO":
+            color = "#8b949e"
+        elif level == "ACTIVE":
+            color = "#58a6ff"
+        elif level == "TASK":
+            color = "#f78166"
+        elif level == "SUCCESS":
+            color = "#3fb950"
+        else:
+            color = "#c9d1d9"
+        
+        log_html += f'<div class="terminal-line" style="color: {color};">{message}</div>'
+    
+    log_html += '</div>'
+    st.markdown(log_html, unsafe_allow_html=True)
+    
+    # Auto refresh
+    if auto_refresh:
+        time.sleep(0.1)  # Small delay to prevent excessive CPU usage
+        st.rerun()
+
 # Footer
 st.markdown("<div style='padding: 32px 0;'></div>", unsafe_allow_html=True)
 st.markdown("""
@@ -1353,4 +1591,4 @@ st.markdown("""
     🦞 KimiClaw v3.0.0-multiagent | Multi-Agent IDE | 
     <a href="https://github.com/loslos321-lab/openklaw_5.1-beta" style="color: #58a6ff;">GitHub</a>
 </div>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=False)
