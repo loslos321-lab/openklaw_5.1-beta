@@ -22,11 +22,19 @@ from virtual_agent import simulate_agent_work, quick_demo_task, VirtualAgent
 CLAWWORK_AVAILABLE = False
 LOCAL_MODE = False
 
+# Check if simulation mode is disabled via environment variable
+DISABLE_SIMULATION = os.environ.get('DISABLE_SIMULATION', 'false').lower() == 'true'
+
 # Check if ClawWork exists locally
 BASE_DIR = Path(__file__).parent.parent
 clawwork_path = BASE_DIR / "clawwork"
 
-if clawwork_path.exists():
+if DISABLE_SIMULATION:
+    # Force local mode for Docker/real deployment
+    LOCAL_MODE = True
+    CLAWWORK_AVAILABLE = True
+    print("[OK] Simulation disabled via environment - Running in LOCAL MODE")
+elif clawwork_path.exists():
     # Set up correct Python paths for ClawWork imports
     sys.path.insert(0, str(clawwork_path))
     sys.path.insert(0, str(clawwork_path / "livebench"))
