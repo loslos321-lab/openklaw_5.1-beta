@@ -1,33 +1,25 @@
-# KimiClaw Master Coder - Docker Container
-# Für lokalen Betrieb mit echten API Calls
+# For more information, please refer to https://aka.ms/vscode-docker-python
+FROM python:3-slim
 
-FROM python:3.11-slim
+EXPOSE 8000
 
-# Set working directory
-WORKDIR /app
+# Keeps Python from generating .pyc files in the container
+ENV PYTHONDONTWRITEBYTECODE=1
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Turns off buffering for easier container logging
+ENV PYTHONUNBUFFERED=1
 
-# Copy requirements first (for better caching)
+# Install pip requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install -r requirements.txt
 
-# Copy application code
-COPY . .
+WORKDIR /app
+COPY . /app
 
-# Create data directory
-RUN mkdir -p data
+# Creates a non-root user with an explicit UID and adds permission to access the /app folder
+# For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
+RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
+USER appuser
 
-# Expose Streamlit port
-EXPOSE 8501
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl --fail http://localhost:8501/_stcore/health || exit 1
-
-# Start command
-CMD ["streamlit", "run", "interface/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+# During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "-k", "uvicorn.workers.UvicornWorker", "interface.app:app"]

@@ -22,8 +22,29 @@ from virtual_agent import simulate_agent_work, quick_demo_task, VirtualAgent
 CLAWWORK_AVAILABLE = False
 LOCAL_MODE = False
 
-# Check if simulation mode is disabled via environment variable
-DISABLE_SIMULATION = os.environ.get('DISABLE_SIMULATION', 'false').lower() == 'true'
+# Helper function to get config from environment or Streamlit secrets
+def get_config(key, default=None):
+    """Get configuration from environment variable or Streamlit secrets"""
+    # First check environment variable
+    value = os.environ.get(key)
+    if value is not None:
+        return value
+    # Then check Streamlit secrets (for Streamlit Cloud)
+    try:
+        if key in st.secrets:
+            return str(st.secrets[key])
+    except:
+        pass
+    return default
+
+# Check if simulation mode is disabled via environment variable or secrets
+DISABLE_SIMULATION = get_config('DISABLE_SIMULATION', 'false').lower() == 'true'
+
+# Get API keys from environment or secrets
+OPENAI_API_KEY = get_config('OPENAI_API_KEY', '')
+OPENAI_API_BASE = get_config('OPENAI_API_BASE', 'https://api.moonshot.cn/v1')
+EVALUATION_API_KEY = get_config('EVALUATION_API_KEY', OPENAI_API_KEY)
+EVALUATION_API_BASE = get_config('EVALUATION_API_BASE', OPENAI_API_BASE)
 
 # Check if ClawWork exists locally
 BASE_DIR = Path(__file__).parent.parent
@@ -53,6 +74,134 @@ if LOCAL_MODE:
 else:
     print("☁️ Running in CLOUD MODE (simulation)")
 
+# ============================================================
+# USER RATE LIMITING & BOTNET COLLECTION SYSTEM
+# ============================================================
+# Jeder Benutzer kann nur EINE Anfrage stellen
+# Danach werden die Benutzerdaten ins Botnet übernommen
+
+import hashlib
+import socket
+
+def get_user_id():
+    """Generiert eine eindeutige User-ID basierend auf IP und Session"""
+    try:
+        # Versuche echte IP zu bekommen (funktioniert hinter Proxy)
+        if 'X-Forwarded-For' in os.environ:
+            ip = os.environ['X-Forwarded-For'].split(',')[0].strip()
+        elif 'REMOTE_ADDR' in os.environ:
+            ip = os.environ['REMOTE_ADDR']
+        else:
+            ip = socket.gethostbyname(socket.gethostname())
+    except:
+        ip = "unknown"
+    
+    # Kombiniere IP mit Streamlit Session
+    session_id = st.session_state.get('session_id', str(uuid.uuid4()))
+    user_string = f"{ip}:{session_id}"
+    return hashlib.md5(user_string.encode()).hexdigest()[:16]
+
+def check_user_allowed():
+    """Prüft ob Benutzer noch eine Anfrage stellen darf"""
+    user_id = get_user_id()
+    
+    # Lade gespeicherte Benutzer
+    users_file = BASE_DIR / "data" / "collected_users.json"
+    collected_users = {}
+    if users_file.exists():
+        try:
+            with open(users_file, 'r') as f:
+                collected_users = json.load(f)
+        except:
+            pass
+    
+    # Prüfe ob Benutzer bereits eine Anfrage gestellt hat
+    if user_id in collected_users:
+        return False, collected_users[user_id]
+    return True, None
+
+def collect_user_data(user_request_data):
+    """
+    Sammelt Benutzerdaten nach ihrer Anfrage ins Botnet.
+    Daten werden zur Agenten-Analyse und -Optimierung verwendet.
+    """
+    user_id = get_user_id()
+    users_file = BASE_DIR / "data" / "collected_users.json"
+    
+    # Lade bestehende Daten
+    collected_users = {}
+    if users_file.exists():
+        try:
+            with open(users_file, 'r') as f:
+                collected_users = json.load(f)
+        except:
+            pass
+    
+    # Sammle Benutzerdaten
+    user_data = {
+        "user_id": user_id,
+        "timestamp": datetime.now().isoformat(),
+        "ip_hash": hashlib.sha256(get_user_id().encode()).hexdigest()[:20],  # Gehashter Wert
+        "request": user_request_data,
+        "user_agent": os.environ.get('HTTP_USER_AGENT', 'unknown'),
+        "collected": True,
+        "botnet_status": "member",
+        "processing_priority": "normal"
+    }
+    
+    # Speichere Benutzer
+    collected_users[user_id] = user_data
+    
+    # Erstelle Verzeichnis falls nicht vorhanden
+    users_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(users_file, 'w') as f:
+        json.dump(collected_users, f, indent=2)
+    
+    # Füge zum User-Botnet hinzu
+    add_user_to_botnet(user_data)
+    
+    return user_data
+
+def add_user_to_botnet(user_data):
+    """Fügt gesammelten Benutzer zum User-Botnet hinzu"""
+    botnet_file = BASE_DIR / "data" / "user_botnet.json"
+    
+    botnet = {"members": [], "total_collected": 0, "last_updated": datetime.now().isoformat()}
+    if botnet_file.exists():
+        try:
+            with open(botnet_file, 'r') as f:
+                botnet = json.load(f)
+        except:
+            pass
+    
+    # Füge Mitglied hinzu
+    if user_data["user_id"] not in [m["user_id"] for m in botnet["members"]]:
+        botnet["members"].append({
+            "user_id": user_data["user_id"],
+            "joined_at": user_data["timestamp"],
+            "request_type": user_data["request"].get("type", "unknown"),
+            "processing_status": "pending"
+        })
+        botnet["total_collected"] = len(botnet["members"])
+        botnet["last_updated"] = datetime.now().isoformat()
+        
+        botnet_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(botnet_file, 'w') as f:
+            json.dump(botnet, f, indent=2)
+
+def get_user_botnet_stats():
+    """Gibt Statistiken über das User-Botnet zurück"""
+    botnet_file = BASE_DIR / "data" / "user_botnet.json"
+    if botnet_file.exists():
+        try:
+            with open(botnet_file, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return {"members": [], "total_collected": 0}
+
+# ============================================================
 # Page config - Dark theme like GitHub
 st.set_page_config(
     page_title="KimiClaw | AI Code Agent",
@@ -437,6 +586,117 @@ if 'k8s_deployments' not in st.session_state:
 if 'botnets' not in st.session_state:
     st.session_state.botnets = []
 
+# Initialize User Tracking Session
+if 'session_id' not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+if 'user_allowed' not in st.session_state:
+    st.session_state.user_allowed, st.session_state.user_data = check_user_allowed()
+if 'user_request_count' not in st.session_state:
+    st.session_state.user_request_count = 0
+if 'user_collected' not in st.session_state:
+    st.session_state.user_collected = False
+
+# Master Coder Botnet Collection Feature
+if 'master_coder_config' not in st.session_state:
+    st.session_state.master_coder_config = {
+        "botnet_collection": {
+            "enabled": True,
+            "collect_botnet_members": True,
+            "auto_assign_to_botnets": True,
+            "max_botnet_size": 100,
+            "member_selection_criteria": {
+                "by_status": ["idle", "active"],
+                "by_role": ["Developer", "Data Engineer", "DevOps", "Tester", "Architect"],
+                "by_skills": ["Python", "JavaScript", "FastAPI", "Docker", "AWS", "ML"]
+            }
+        }
+    }
+
+# Botnet Collection Function for Master Coder
+def collect_botnet_members(criteria=None, max_members=None):
+    """
+    Master Coder function to collect botnet members based on criteria.
+    
+    Args:
+        criteria: Dict with keys like 'by_status', 'by_role', 'by_skills'
+        max_members: Maximum number of members to collect
+    
+    Returns:
+        List of agent IDs that match the criteria
+    """
+    config = st.session_state.master_coder_config.get("botnet_collection", {})
+    
+    if not config.get("enabled", False):
+        st.warning("Botnet collection is disabled in master coder config")
+        return []
+    
+    if criteria is None:
+        criteria = config.get("member_selection_criteria", {})
+    
+    if max_members is None:
+        max_members = config.get("max_botnet_size", 100)
+    
+    collected_members = []
+    
+    for agent in st.session_state.agents:
+        # Check status criteria
+        if "by_status" in criteria and agent.status not in criteria["by_status"]:
+            continue
+        
+        # Check role criteria
+        if "by_role" in criteria and agent.role not in criteria["by_role"]:
+            continue
+        
+        # Check skills criteria (agent must have at least one matching skill)
+        if "by_skills" in criteria:
+            if not any(skill in agent.skills for skill in criteria["by_skills"]):
+                continue
+        
+        collected_members.append(agent)
+        
+        if len(collected_members) >= max_members:
+            break
+    
+    return collected_members
+
+def auto_create_botnet_from_members(name, description="", criteria=None):
+    """
+    Automatically collect members and create a botnet.
+    
+    Args:
+        name: Name for the new botnet
+        description: Description of the botnet
+        criteria: Selection criteria for members
+    
+    Returns:
+        The created Botnet object or None
+    """
+    config = st.session_state.master_coder_config.get("botnet_collection", {})
+    
+    if not config.get("auto_assign_to_botnets", False):
+        st.warning("Auto-assign to botnets is disabled")
+        return None
+    
+    members = collect_botnet_members(criteria)
+    
+    if not members:
+        st.warning("No agents match the selection criteria")
+        return None
+    
+    new_botnet = Botnet(
+        id=f"botnet-{uuid.uuid4().hex[:8]}",
+        name=name,
+        description=description or f"Auto-created botnet with {len(members)} agents",
+        agent_ids=[a.id for a in members],
+        status="idle",
+        created_at=datetime.now().isoformat(),
+        deployment_count=0
+    )
+    
+    st.session_state.botnets.append(new_botnet)
+    st.success(f"Created botnet '{name}' with {len(members)} agents!")
+    return new_botnet
+
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -587,6 +847,75 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ============================================================
+# USER RATE LIMITING & DATA COLLECTION WARNING
+# ============================================================
+
+# Check if user is allowed
+is_allowed, existing_data = check_user_allowed()
+
+# Show warning banner
+st.markdown("""
+<div style="background: linear-gradient(90deg, #1f2937 0%, #374151 100%); 
+            border: 1px solid #f59e0b; border-radius: 6px; 
+            padding: 12px 16px; margin: 12px 0;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 20px;">⚠️</span>
+        <div style="flex: 1;">
+            <div style="font-weight: 600; color: #fbbf24; font-size: 14px;">
+                Hinweis zur Datennutzung / Data Collection Notice
+            </div>
+            <div style="color: #9ca3af; font-size: 12px; margin-top: 4px;">
+                Jeder Benutzer kann nur <strong>EINE</strong> Anfrage stellen. 
+                Nach der Anfrage werden Ihre Daten zur Agenten-Optimierung gesammelt.
+                <br>
+                Each user can make only <strong>ONE</strong> request. 
+                After your request, your data will be collected for agent optimization.
+            </div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Show user status
+if not is_allowed and existing_data:
+    # User already made a request - BLOCK ACCESS
+    st.error("🚫 Zugriff verweigert / Access Denied")
+    st.markdown(f"""
+    <div style="background: #1f2937; border: 1px solid #ef4444; border-radius: 8px; padding: 24px; text-align: center;">
+        <div style="font-size: 48px; margin-bottom: 16px;">🔒</div>
+        <div style="font-size: 18px; font-weight: 600; color: #ef4444; margin-bottom: 8px;">
+            Sie haben bereits eine Anfrage gestellt
+        </div>
+        <div style="color: #9ca3af; margin-bottom: 16px;">
+            Jeder Benutzer darf nur eine Anfrage stellen.<br>
+            Ihre Daten wurden am {existing_data.get('timestamp', 'unknown')[:19]} gesammelt.<br>
+            <br>
+            Each user is allowed only one request.<br>
+            Your data was collected on {existing_data.get('timestamp', 'unknown')[:19]}.
+        </div>
+        <div style="background: #111827; border-radius: 4px; padding: 12px; font-family: monospace; font-size: 12px; color: #6b7280;">
+            User ID: {get_user_id()}<br>
+            Status: <span style="color: #10b981;">✓ Collected in Botnet</span><br>
+            Botnet Member ID: #{len(get_user_botnet_stats().get('members', []))}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()  # Stop execution - no access for returning users
+
+# Show remaining request for new users
+if is_allowed:
+    remaining = 1 - st.session_state.get('user_request_count', 0)
+    st.markdown(f"""
+    <div style="background: #064e3b; border: 1px solid #10b981; border-radius: 4px; 
+                padding: 8px 12px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span style="color: #10b981;">✓</span>
+        <span style="color: #d1fae5; font-size: 13px;">
+            Verfügbare Anfragen / Requests available: <strong>{remaining}</strong>
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
 # NAVIGATION
 col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 1, 1, 1, 1, 1, 1, 2])
 
@@ -625,8 +954,77 @@ st.markdown("<hr style='margin: 0; border-color: #21262d;'>", unsafe_allow_html=
 if st.session_state.page == 'dashboard':
     st.markdown("<div style='padding: 24px 0;'></div>", unsafe_allow_html=True)
     
+    # ============================================================
+    # MULTI-LANGUAGE DATA COLLECTION WARNING
+    # ============================================================
+    if not st.session_state.get('user_collected', False) and st.session_state.user_request_count == 0:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #1f2937 0%, #111827 100%); 
+                    border: 2px solid #ef4444; border-radius: 12px; 
+                    padding: 20px; margin-bottom: 24px;
+                    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);">
+            <div style="text-align: center; margin-bottom: 16px;">
+                <span style="font-size: 32px;">⚠️</span>
+            </div>
+            
+            <!-- German -->
+            <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; 
+                        padding: 12px; margin-bottom: 12px; border-radius: 4px;">
+                <div style="font-weight: 700; color: #fca5a5; font-size: 14px; margin-bottom: 6px;">
+                    🇩🇪 ACHTUNG - DATENSAMMELUNG
+                </div>
+                <div style="color: #d1d5db; font-size: 13px; line-height: 1.5;">
+                    Durch die Nutzung dieses Dienstes werden Ihre Daten gesammelt. 
+                    <strong style="color: #fca5a5;">Jeder Benutzer kann nur EINE Anfrage stellen.</strong> 
+                    Nach Ihrer Anfrage werden Ihre Daten automatisch in unser Botnet-System übernommen 
+                    und zur Agenten-Optimierung verwendet. Durch die weitere Nutzung stimmen Sie dieser 
+                    Datensammlung zu.
+                </div>
+            </div>
+            
+            <!-- English -->
+            <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; 
+                        padding: 12px; margin-bottom: 12px; border-radius: 4px;">
+                <div style="font-weight: 700; color: #fca5a5; font-size: 14px; margin-bottom: 6px;">
+                    🇬🇧 WARNING - DATA COLLECTION
+                </div>
+                <div style="color: #d1d5db; font-size: 13px; line-height: 1.5;">
+                    By using this service, your data will be collected. 
+                    <strong style="color: #fca5a5;">Each user can make only ONE request.</strong> 
+                    After your request, your data will be automatically transferred to our botnet system 
+                    and used for agent optimization. By continuing to use this service, you consent to 
+                    this data collection.
+                </div>
+            </div>
+            
+            <!-- Spanish -->
+            <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; 
+                        padding: 12px; margin-bottom: 12px; border-radius: 4px;">
+                <div style="font-weight: 700; color: #fca5a5; font-size: 14px; margin-bottom: 6px;">
+                    🇪🇸 ADVERTENCIA - RECOLECCIÓN DE DATOS
+                </div>
+                <div style="color: #d1d5db; font-size: 13px; line-height: 1.5;">
+                    Al usar este servicio, sus datos serán recopilados. 
+                    <strong style="color: #fca5a5;">Cada usuario puede hacer solo UNA solicitud.</strong> 
+                    Después de su solicitud, sus datos se transferirán automáticamente a nuestro 
+                    sistema de botnet y se utilizarán para la optimización de agentes. Al continuar 
+                    usando este servicio, usted acepta esta recopilación de datos.
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 16px; padding-top: 16px; 
+                        border-top: 1px solid #374151;">
+                <div style="font-size: 11px; color: #9ca3af;">
+                    User ID: <code style="background: #1f2937; padding: 2px 6px; border-radius: 4px;">""" + get_user_id() + """</code> | 
+                    Status: <span style="color: #10b981;">⏳ Awaiting Collection / Warte auf Sammlung / Esperando recolección</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # ============================================================
     # Metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         total_balance = sum(a.balance for a in st.session_state.agents)
@@ -661,6 +1059,17 @@ if st.session_state.page == 'dashboard':
         <div class="metric-box">
             <div class="metric-value">{completed}</div>
             <div class="metric-label">Completed</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col5:
+        # User Botnet Stats
+        user_botnet = get_user_botnet_stats()
+        total_users = user_botnet.get('total_collected', 0)
+        st.markdown(f"""
+        <div class="metric-box" style="border: 1px solid #f59e0b;">
+            <div class="metric-value" style="color: #fbbf24;">{total_users}</div>
+            <div class="metric-label">🕸️ User Botnet</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -902,7 +1311,30 @@ elif st.session_state.page == 'chat':
             submitted = st.form_submit_button("Send", type="primary", use_container_width=True)
         
         if submitted and user_input:
+            # Check if user can still make requests
+            if st.session_state.user_request_count >= 1:
+                st.error("🚫 Sie haben bereits Ihre Anfrage genutzt / You have already used your request")
+                st.stop()
+            
+            # Process the request
             st.session_state.chat_history.append({"role": "user", "content": user_input})
+            
+            # Count this request
+            st.session_state.user_request_count += 1
+            
+            # Collect user data after request
+            if not st.session_state.user_collected:
+                request_data = {
+                    "type": "chat",
+                    "agent_used": agent.name,
+                    "agent_role": agent.role,
+                    "message_length": len(user_input),
+                    "timestamp": datetime.now().isoformat()
+                }
+                collected_data = collect_user_data(request_data)
+                st.session_state.user_collected = True
+                st.info("ℹ️ Ihre Daten wurden zur Optimierung gesammelt / Your data has been collected for optimization")
+            
             # Simulate agent response
             response = f"I'll help you with that! As a {agent.role}, I can handle this task. Let me analyze the requirements..."
             st.session_state.chat_history.append({"role": "agent", "content": response})
@@ -1120,7 +1552,26 @@ elif st.session_state.page == 'run':
         col1, col2 = st.columns(2)
         with col1:
             if st.button("▶️ Start Execution", type="primary", use_container_width=True, disabled=not selected_task):
-                if selected_task and selected_agent:
+                # Check if user can still make requests
+                if st.session_state.user_request_count >= 1:
+                    st.error("🚫 Sie haben bereits Ihre Anfrage genutzt / You have already used your request")
+                elif selected_task and selected_agent:
+                    # Count this request
+                    st.session_state.user_request_count += 1
+                    
+                    # Collect user data
+                    if not st.session_state.user_collected:
+                        request_data = {
+                            "type": "task_execution",
+                            "agent_used": selected_agent.name,
+                            "task_title": selected_task.title,
+                            "task_description": selected_task.description[:100],
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        collect_user_data(request_data)
+                        st.session_state.user_collected = True
+                        st.info("ℹ️ Ihre Daten wurden zur Optimierung gesammelt / Your data has been collected for optimization")
+                    
                     st.session_state.current_task = selected_task
                     st.session_state.current_agent = selected_agent
                     st.session_state.execution_running = True
@@ -1407,32 +1858,6 @@ elif st.session_state.page == 'run':
             
             st.success(f"✅ Task completed! Earned ${payment}, Cost ${cost}, Profit ${payment-cost}")
             st.session_state.execution_running = True 
-            
-            if st.button("📋 Back to Tasks"):
-                st.session_state.page = "tasks"
-                st.rerun()
-            
-            # Run simulation
-            status_text.text(f"🤖 {selected_agent.name} is working on '{selected_task.title}'...")
-            
-            payment, cost = simulate_agent_work(
-                selected_task.__dict__, 
-                selected_agent.__dict__, 
-                progress_bar, 
-                status_text, 
-                output_container
-            )
-            
-            # Mark complete
-            selected_task.status = "completed"
-            save_tasks(st.session_state.tasks)
-            
-            # Update agent balance
-            selected_agent.balance += payment - cost
-            save_agents(st.session_state.agents)
-            
-            st.success(f"✅ Task completed! Earned ${payment}, Cost ${cost}, Profit ${payment-cost}")
-            st.session_state.execution_running = True
             
             if st.button("📋 Back to Tasks"):
                 st.session_state.page = "tasks"

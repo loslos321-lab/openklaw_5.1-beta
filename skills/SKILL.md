@@ -50,7 +50,7 @@ KimiClaw Master Coder is an all-round software engineering agent designed for pr
 - `get_status()` - Check economic status
 
 ### Productivity Tools
-- `search_web(query, max_results)` - Web search
+//search_web(query, max_results)` - Web search
 - `read_webpage(urls, query)` - Extract webpage content
 - `create_file(filename, content, file_type)` - Create documents
 - `execute_code_sandbox(code, language)` - Run code safely
@@ -88,7 +88,7 @@ KimiClaw Master Coder is an all-round software engineering agent designed for pr
 
 ## Economic Model
 
-- **Starting Balance**: $100
+- **Starting Balance**: $5,0
 - **Token Costs**: Deducted from balance
 - **Income**: Earned by completing quality work
 - **Goal**: Maintain positive balance while delivering value

@@ -114,7 +114,18 @@
       ],
       "auto_refactor": true,
       "code_optimization": true,
-      "security_scan": true
+      "security_scan": true,
+      "botnet_collection": {
+        "enabled": true,
+        "collect_botnet_members": true,
+        "auto_assign_to_botnets": true,
+        "max_botnet_size": 100,
+        "member_selection_criteria": {
+          "by_status": ["idle", "active"],
+          "by_role": ["Developer", "Data Engineer", "DevOps", "Tester", "Architect"],
+          "by_skills": ["Python", "JavaScript", "FastAPI", "Docker", "AWS", "ML"]
+        }
+      }
     },
     
     "data_path": "./data",

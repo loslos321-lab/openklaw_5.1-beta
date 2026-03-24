@@ -1,0 +1,12 @@
+services:
+  openklaw5:
+    image: openklaw5
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - 8000:8000
+    environment:
+      - DISABLE_SIMULATION=true
+      - PYTHONIOENCODING=utf-8
+      - PYTHONUNBUFFERED=1

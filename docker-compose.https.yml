@@ -1,0 +1,175 @@
+# KimiClaw - Docker Compose with HTTPS/SSL
+# Automatic SSL certificates via Let's Encrypt
+# Traefik Reverse Proxy with HTTPS redirection
+
+version: '3.8'
+
+services:
+  # Traefik Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: kimiclaw-traefik
+    command:
+      # API Dashboard (disable in production)
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      
+      # Providers
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      
+      # Entry Points
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      
+      # HTTP to HTTPS Redirect
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entryPoint.permanent=true"
+      
+      # Let's Encrypt (Automatic SSL)
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      
+      # Logging
+      - "--log.level=INFO"
+      - "--accesslog=true"
+    
+    ports:
+      - "80:80"
+      - "443:443"
+      # - "8080:8080"  # Traefik Dashboard (optional, comment out in production)
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    
+    networks:
+      - kimiclaw-network
+    
+    restart: unless-stopped
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+
+  # KimiClaw Main Application
+  kimiclaw:
+    build: .
+    container_name: kimiclaw-app
+    expose:
+      - "8501"
+    environment:
+      # API Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.moonshot.cn/v1}
+      - EVALUATION_API_KEY=${EVALUATION_API_KEY:-}
+      - EVALUATION_API_BASE=${EVALUATION_API_BASE:-https://api.moonshot.cn/v1}
+      
+      # Optional APIs
+      - WEB_SEARCH_API_KEY=${WEB_SEARCH_API_KEY:-}
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - CODE_SANDBOX_PROVIDER=${CODE_SANDBOX_PROVIDER:-e2b}
+      
+      # System
+      - PYTHONIOENCODING=utf-8
+      - PYTHONUNBUFFERED=1
+      - AGENT_ID=kimiclaw
+      - DISABLE_SIMULATION=true
+    
+    volumes:
+      - ./data:/app/data
+      - ./memory:/app/memory
+      - ./work:/app/work
+    
+    networks:
+      - kimiclaw-network
+    
+    restart: unless-stopped
+    
+    labels:
+      # Traefik Router Configuration
+      - "traefik.enable=true"
+      - "traefik.http.routers.kimiclaw.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.kimiclaw.entrypoints=websecure"
+      - "traefik.http.routers.kimiclaw.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.kimiclaw.tls=true"
+      
+      # Service Configuration
+      - "traefik.http.services.kimiclaw.loadbalancer.server.port=8501"
+      
+      # Security Headers
+      - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.security-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.security-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.security-headers.headers.browserXssFilter=true"
+      
+      # Apply security headers
+      - "traefik.http.routers.kimiclaw.middlewares=security-headers"
+    
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    
+    depends_on:
+      - traefik
+
+  # Optional: Agent0 - Secondary Agent
+  agent0:
+    build: .
+    container_name: kimiclaw-agent0
+    expose:
+      - "8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.moonshot.cn/v1}
+      - EVALUATION_API_KEY=${EVALUATION_API_KEY:-}
+      - EVALUATION_API_BASE=${EVALUATION_API_BASE:-https://api.moonshot.cn/v1}
+      - WEB_SEARCH_API_KEY=${WEB_SEARCH_API_KEY:-}
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - CODE_SANDBOX_PROVIDER=${CODE_SANDBOX_PROVIDER:-e2b}
+      - PYTHONIOENCODING=utf-8
+      - PYTHONUNBUFFERED=1
+      - AGENT_ID=agent0
+      - DISABLE_SIMULATION=true
+    
+    volumes:
+      - ./data/agent0:/app/data
+      - ./memory/agent0:/app/memory
+      - ./work/agent0:/app/work
+    
+    networks:
+      - kimiclaw-network
+    
+    restart: unless-stopped
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agent0.rule=Host(`agent0.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.agent0.entrypoints=websecure"
+      - "traefik.http.routers.agent0.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.agent0.tls=true"
+      - "traefik.http.services.agent0.loadbalancer.server.port=8501"
+      - "traefik.http.routers.agent0.middlewares=security-headers"
+    
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    
+    depends_on:
+      - traefik
+
+networks:
+  kimiclaw-network:
+    name: kimiclaw-network
+    driver: bridge

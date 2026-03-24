@@ -44,7 +44,7 @@ kimiclaw/
 ├── interface/          # Streamlit Web-Interface
 │   ├── app.py         # Haupt-Anwendung
 │   ├── database.py    # SQLite Datenbank
-│   └── agent_runner.py # Agent-Steuerung
+│   └──  # Agent-Steuerung
 ├── requirements.txt   # Python Dependencies
 └── README.md         # Diese Datei
 ```
