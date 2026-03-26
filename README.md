@@ -11,7 +11,7 @@ streamlit run interface/app.py
 ```
 
 ### Online
-Die App läuft auf Streamlit Cloud: [Hier öffnen](https://kimiclaw.streamlit.app)
+Die App läuft (noch nicht) auf Streamlit Cloud: [Hier öffnen](https://kimiclaw.streamlit.app)
 
 ## 🎯 Features
 
